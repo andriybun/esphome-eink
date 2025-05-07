@@ -1491,6 +1491,11 @@ void WaveshareEPaper7P5InBV2::dump_config() {
 //  - https://github.com/waveshareteam/e-Paper/tree/master/Arduino/epd5in83b_V2
 // ========================================================
 void WaveshareEPaper5P8InBV2::initialize() {
+  this->reset_pin_->digital_write(false);
+  delay(1);
+  this->reset_pin_->digital_write(true);
+  delay(200);  // NOLINT
+
   // COMMAND POWER SETTING
   this->command(0x01);
   this->data(0x07);
@@ -1525,30 +1530,34 @@ void WaveshareEPaper5P8InBV2::initialize() {
   // COMMAND TCON SETTING
   this->command(0x60);
   this->data(0x22);
+
+  this->clear_();
 }
-
 void HOT WaveshareEPaper5P8InBV2::display() {
-  // COMMAND DATA START TRANSMISSION 1 (B/W data)
-  this->command(0x10);
-  delay(2);
-  this->start_data_();
-  this->write_array(this->buffer_, this->get_buffer_length_());
-  this->end_data_();
-  delay(2);
+  const uint32_t buf_len = this->get_buffer_length_() / 2u;
 
-  // COMMAND DATA START TRANSMISSION 2 (RED data)
-  this->command(0x13);
-  delay(2);
-  this->start_data_();
-  for (size_t i = 0; i < this->get_buffer_length_(); i++)
-    this->write_byte(0x00);  // no red data, therefore set zeroes
-  this->end_data_();
-  delay(2);
+  this->command(0x10);  // Send BW data Transmission
+  delay(2);             // Delay to prevent Watchdog error
+  for (uint32_t i = 0; i < buf_len; ++i) {
+    this->data(this->buffer_[i]);
+  }
+
+  this->command(0x13);  // Send red data Transmission
+  delay(2);             // Delay to prevent Watchdog error
+  for (uint32_t i = 0; i < buf_len; ++i) {
+    this->data(this->buffer_[buf_len + i]);
+  }
 
   // COMMAND DISPLAY REFRESH
   this->command(0x12);
-  delay(100);  // NOLINT
   this->wait_until_idle_();
+
+  // COMMAND POWER OFF
+  // NOTE: power off < deep sleep
+  this->command(0x02);
+  this->wait_until_idle_();
+  this->command(0x07);
+  this->data(0xA5);
 }
 int WaveshareEPaper5P8InBV2::get_width_internal() { return 648; }
 int WaveshareEPaper5P8InBV2::get_height_internal() { return 480; }
@@ -1559,6 +1568,53 @@ void WaveshareEPaper5P8InBV2::dump_config() {
   LOG_PIN("  DC Pin: ", this->dc_pin_);
   LOG_PIN("  Busy Pin: ", this->busy_pin_);
   LOG_UPDATE_INTERVAL(this);
+}
+void WaveshareEPaper5P8InBV2::deep_sleep() {
+  // COMMAND VCOM AND DATA INTERVAL SETTING
+  this->command(0x50);
+  this->data(0x17);  // border floating
+
+  // COMMAND VCM DC SETTING
+  this->command(0x82);
+  // COMMAND PANEL SETTING
+  this->command(0x00);
+
+  delay(100);  // NOLINT
+
+  // COMMAND POWER SETTING
+  this->command(0x01);
+  this->data(0x00);
+  this->data(0x00);
+  this->data(0x00);
+  this->data(0x00);
+  this->data(0x00);
+  delay(100);  // NOLINT
+
+  // COMMAND POWER OFF
+  this->command(0x02);
+  this->wait_until_idle_();
+  // COMMAND DEEP SLEEP
+  this->command(0x07);
+  this->data(0xA5);  // check byte
+}
+void WaveshareEPaper5P8InBV2::clear_() {
+  const uint32_t buf_len = this->get_buffer_length_() / 2u;
+
+  this->command(0x10);
+  delay(2);
+  for (uint32_t i = 0; i < buf_len; ++i) {
+    this->data(0xFF);
+  }
+
+  this->command(0x13);
+  delay(2);
+  for (uint32_t i = 0; i < buf_len; ++i) {
+    this->data(0x00);
+  }
+
+  // COMMAND DISPLAY REFRESH
+  this->command(0x12);
+  this->wait_until_idle_();
 }
 
 void WaveshareEPaper7P5InBV3::initialize() { this->init_display_(); }
