@@ -1550,14 +1550,8 @@ void HOT WaveshareEPaper5P8InBV2::display() {
 
   // COMMAND DISPLAY REFRESH
   this->command(0x12);
+  delay(100);  // NOLINT
   this->wait_until_idle_();
-
-  // COMMAND POWER OFF
-  // NOTE: power off < deep sleep
-  this->command(0x02);
-  this->wait_until_idle_();
-  this->command(0x07);
-  this->data(0xA5);
 }
 int WaveshareEPaper5P8InBV2::get_width_internal() { return 648; }
 int WaveshareEPaper5P8InBV2::get_height_internal() { return 480; }
